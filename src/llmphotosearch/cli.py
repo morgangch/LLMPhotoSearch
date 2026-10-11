@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from rich.console import Console
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, TimeRemainingColumn
 
 from llmphotosearch import __version__
 
@@ -12,6 +14,9 @@ app = typer.Typer(
     help="Search photo folders with a natural-language description, using a local VLM.",
     no_args_is_help=True,
 )
+console = Console(stderr=True)
+
+MAX_PRINTED_MATCHES = 3
 
 
 def _version_callback(value: bool) -> None:
@@ -39,22 +44,59 @@ def search(
             exists=True, file_okay=False, help="One or more folders, scanned recursively."
         ),
     ],
-    threshold: Annotated[
-        float, typer.Option(min=0, max=100, help="Minimum match percentage to keep an image.")
-    ] = 50.0,
     top_k: Annotated[
-        int, typer.Option(min=1, help="Number of pre-filtered candidates re-ranked by the VLM.")
+        int, typer.Option(min=1, help="Number of best candidates kept by the pre-filter.")
     ] = 30,
-    model: Annotated[
-        str | None, typer.Option(help="VLM to use (default: chosen from detected hardware).")
-    ] = None,
     out: Annotated[
-        Path | None, typer.Option(help="Report path when more than 3 images match.")
+        Path | None,
+        typer.Option(help="Also write the candidates to this report (.md or .json)."),
     ] = None,
 ) -> None:
     """Find the images in FOLDERS that best match DESCRIPTION."""
-    typer.echo("Search is not implemented yet.", err=True)
-    raise typer.Exit(code=1)
+    from llmphotosearch.backends.siglip import SigLIP
+    from llmphotosearch.core.images import iter_images
+    from llmphotosearch.export.report import to_json, to_markdown
+    from llmphotosearch.index.indexer import build_index
+    from llmphotosearch.index.store import EmbeddingStore
+    from llmphotosearch.ranking.search import prefilter
+
+    images = list(iter_images(folders))
+    if not images:
+        console.print("No images found.")
+        raise typer.Exit(code=1)
+
+    embedder = SigLIP()
+    with (
+        EmbeddingStore() as store,
+        Progress(
+            "[progress.description]{task.description}",
+            BarColumn(),
+            MofNCompleteColumn(),
+            TimeRemainingColumn(),
+            console=console,
+            transient=True,
+        ) as progress,
+    ):
+        task = progress.add_task("Indexing", total=len(images))
+        index = build_index(
+            images, embedder, store, on_progress=lambda n: progress.advance(task, n)
+        )
+
+    for path, error in index.failed:
+        console.print(f"[yellow]Skipped unreadable image[/] {path} ({error})")
+    if not index.paths:
+        raise typer.Exit(code=1)
+
+    # Embedding scores rank well but are not calibrated percentages; the
+    # thresholded match percentage comes with VLM re-ranking.
+    candidates = prefilter(description, index, embedder)[:top_k]
+    for m in candidates[:MAX_PRINTED_MATCHES]:
+        typer.echo(m.path)
+
+    if out:
+        render = to_json if out.suffix.lower() == ".json" else to_markdown
+        out.write_text(render(description, candidates), encoding="utf-8")
+        console.print(f"{len(candidates)} candidates written to {out.resolve()}")
 
 
 @app.command()
