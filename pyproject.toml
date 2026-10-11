@@ -1,0 +1,47 @@
+[project]
+name = "llmphotosearch"
+version = "0.1.0"
+description = "Search local photo folders with a natural-language description, using a small vision-language model running locally."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+    { name = "morgangch", email = "morgan.guichard@epitech.eu" }
+]
+requires-python = ">=3.11"
+keywords = ["photo", "image-search", "vlm", "llama.cpp", "siglip", "cli"]
+classifiers = [
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics",
+]
+dependencies = [
+    "typer>=0.12",
+]
+
+[project.urls]
+Repository = "https://github.com/morgangch/LLMPhotoSearch"
+
+[project.scripts]
+photosearch = "llmphotosearch.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
