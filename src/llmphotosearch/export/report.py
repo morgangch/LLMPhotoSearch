@@ -11,15 +11,16 @@ def _escape_cell(text: str) -> str:
     return text.replace("|", "\\|")
 
 
-def to_markdown(description: str, matches: Sequence[Match]) -> str:
+def to_markdown(description: str, matches: Sequence[Match], reranked: bool = True) -> str:
+    """`reranked` False means scores are uncalibrated embedding similarities."""
     lines = [
         "# Photo search results",
         "",
         f"- **Description:** {description}",
         f"- **Date:** {datetime.now().isoformat(timespec='seconds')}",
-        f"- **Matches:** {len(matches)}",
+        f"- **Images:** {len(matches)}",
         "",
-        "| # | Score | Path |",
+        f"| # | {'Match' if reranked else 'Similarity'} | Path |",
         "|---:|---:|---|",
     ]
     for rank, m in enumerate(matches, 1):
@@ -27,13 +28,17 @@ def to_markdown(description: str, matches: Sequence[Match]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def to_json(description: str, matches: Sequence[Match]) -> str:
+def to_json(description: str, matches: Sequence[Match], reranked: bool = True) -> str:
+    def entry(rank: int, m: Match) -> dict:
+        e = {"rank": rank, "score": round(m.score, 4), "path": str(m.path)}
+        if m.prefilter_score is not None:
+            e["prefilter_score"] = round(m.prefilter_score, 4)
+        return e
+
     data = {
         "description": description,
         "date": datetime.now().isoformat(timespec="seconds"),
-        "matches": [
-            {"rank": rank, "score": round(m.score, 4), "path": str(m.path)}
-            for rank, m in enumerate(matches, 1)
-        ],
+        "score": "match_probability" if reranked else "embedding_similarity",
+        "matches": [entry(rank, m) for rank, m in enumerate(matches, 1)],
     }
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"

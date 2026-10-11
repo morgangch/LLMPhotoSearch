@@ -19,6 +19,8 @@ class Match:
     path: Path
     score: float
     """Match probability in [0, 1]."""
+    prefilter_score: float | None = None
+    """Embedding-based score the candidate was pre-selected with, once re-ranked."""
 
 
 def prefilter(description: str, index: IndexResult, embedder: TextEmbedder) -> list[Match]:

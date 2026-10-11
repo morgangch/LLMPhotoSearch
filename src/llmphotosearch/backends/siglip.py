@@ -54,6 +54,11 @@ class SigLIP:
     def image_size(self) -> int:
         return self.spec.image_size
 
+    def download(self) -> None:
+        """Fetch the model files now rather than on first use."""
+        for file in (self.spec.vision_file, self.spec.text_file, "tokenizer.json"):
+            hf_hub_download(self.spec.repo, file)
+
     def _session(self, file: str) -> ort.InferenceSession:
         return ort.InferenceSession(hf_hub_download(self.spec.repo, file), providers=_providers())
 
